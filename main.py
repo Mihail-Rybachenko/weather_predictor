@@ -30,6 +30,7 @@ file_path_entry = None
 model_path_entry = None
 year_entry = None
 output_text = None
+progress_bar = None  # Новая переменная для прогресс-бара
 
 def print_message(message):
     """
@@ -72,14 +73,38 @@ def load_my_weather_data(filename):
 def create_and_train_model(X_train, y_train, X_test, y_test):
     """
     Создаёт и обучает нейронную сеть для предсказания температуры по месяцам.
+    Обновляет прогресс-бар во время обучения.
     """
+    global progress_bar, root
+
     model = Sequential([
         Dense(64, input_dim=X_train.shape[1], activation='relu'),
         Dense(32, activation='relu'),
         Dense(12)
     ])
     model.compile(optimizer='adam', loss='mse', metrics=['mae'])
-    history = model.fit(X_train, y_train, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.2, verbose=1)
+
+    # Callback для обновления прогресс-бара
+    class ProgressBarCallback(tf.keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            # Вычисляем процент завершения
+            progress = (epoch + 1) / EPOCHS * 100
+            progress_bar['value'] = progress
+            root.update()  # Обновляем интерфейс
+
+    # Обучаем модель с callback
+    history = model.fit(
+        X_train, y_train,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        validation_split=0.2,
+        verbose=0,  # Отключаем стандартный вывод в консоль
+        callbacks=[ProgressBarCallback()]
+    )
+    # Сбрасываем прогресс-бар после обучения
+    progress_bar['value'] = 0
+    root.update()
+
     loss, mae = model.evaluate(X_test, y_test)
     return model, history
 
@@ -245,9 +270,9 @@ def save_model():
 
 def create_widgets():
     """
-    Создаёт элементы интерфейса (кнопки, поля ввода, текстовое поле).
+    Создаёт элементы интерфейса (кнопки, поля ввода, текстовое поле, прогресс-бар).
     """
-    global file_path_entry, model_path_entry, year_entry, output_text
+    global file_path_entry, model_path_entry, year_entry, output_text, progress_bar
 
     # Поле для пути к файлу
     ttk.Label(root, text="Путь к файлу с данными:").pack(pady=5)
@@ -257,6 +282,11 @@ def create_widgets():
 
     # Кнопка загрузки данных
     ttk.Button(root, text="1. Загрузить данные", command=load_data).pack(pady=5)
+
+    # Прогресс-бар для обучения
+    ttk.Label(root, text="Прогресс обучения:").pack(pady=5)
+    progress_bar = ttk.Progressbar(root, length=400, mode='determinate')
+    progress_bar.pack()
 
     # Кнопка обучения модели
     ttk.Button(root, text="2. Обучить модель", command=train_model).pack(pady=5)
